@@ -145,7 +145,11 @@ class AudioAdapter:
         )
 
     async def process_chunk(self, audio_b64: str, source: str) -> str:
-        """Decode base64 WebM audio, send directly to Mistral ASR.
+        """Decode base64 WebM audio, convert to WAV via ffmpeg, send to Mistral ASR.
+
+        MediaRecorder with timeslice produces partial WebM fragments that lack
+        proper container headers, causing Mistral to reject them.  Converting to
+        WAV via ffmpeg produces a valid, self-contained audio file.
 
         Args:
             audio_b64: Base64-encoded WebM audio data.
@@ -157,17 +161,32 @@ class AudioAdapter:
         Raises:
             ASRError: If transcription via ASR service fails.
         """
+        import subprocess
         raw_bytes = base64.b64decode(audio_b64)
-        tmp_path: str | None = None
+        tmp_webm: str | None = None
+        tmp_wav: str | None = None
         try:
-            fd, tmp_path = tempfile.mkstemp(suffix=".webm")
+            # Write raw WebM chunk
+            fd, tmp_webm = tempfile.mkstemp(suffix=".webm")
             os.close(fd)
-            with open(tmp_path, "wb") as f:
+            with open(tmp_webm, "wb") as f:
                 f.write(raw_bytes)
-            
+
+            # Convert to WAV via ffmpeg (container has proper headers)
+            fd2, tmp_wav = tempfile.mkstemp(suffix=".wav")
+            os.close(fd2)
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", tmp_webm, "-ar", "16000", "-ac", "1", tmp_wav],
+                capture_output=True, timeout=10,
+            )
+            if result.returncode != 0:
+                # ffmpeg couldn't decode — likely silence / empty chunk, skip
+                logger.debug("ffmpeg skipped chunk (rc=%d): %s", result.returncode, result.stderr.decode(errors="replace")[:200])
+                return ""
+
             loop = asyncio.get_event_loop()
             text = await loop.run_in_executor(
-                None, self._asr_client.transcribe_raw, tmp_path
+                None, self._asr_client.transcribe_raw, tmp_wav, "audio/wav"
             )
             return text
         except ASRError:
@@ -177,11 +196,12 @@ class AudioAdapter:
                 f"Transcription failed for source '{source}'", cause=exc
             ) from exc
         finally:
-            if tmp_path:
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
+            for p in (tmp_webm, tmp_wav):
+                if p:
+                    try:
+                        os.unlink(p)
+                    except OSError:
+                        pass
 
     def close(self) -> None:
         """Release ASR client resources."""

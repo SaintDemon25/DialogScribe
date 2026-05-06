@@ -3,17 +3,23 @@ import pytest
 import pytest_asyncio
 
 from gigaam_transcriber.template_manager import TemplateManager
-from gigaam_transcriber.database import engine, async_session_factory, Base
+from gigaam_transcriber.database import Base
+
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 
 @pytest_asyncio.fixture
 async def db_session():
-    async with engine.begin() as conn:
+    """In-memory SQLite session for tests."""
+    test_engine = create_async_engine("sqlite+aiosqlite://", echo=False)
+    async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    async with async_session_factory() as session:
+    TestSession = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    async with TestSession() as session:
         yield session
-    async with engine.begin() as conn:
+    async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    await test_engine.dispose()
 
 
 USER_ID = "test-user-import-export"
