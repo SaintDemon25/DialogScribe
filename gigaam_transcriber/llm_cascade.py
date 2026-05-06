@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 # Default model names (can be overridden via env vars)
-DEFAULT_CLASSIFIER_MODEL = os.getenv("LLM_CLASSIFIER_MODEL", "gpt-4.1")
-DEFAULT_ADVISOR_MODEL = os.getenv("LLM_ADVISOR_MODEL", "mistral/mistral-large-latest")
+DEFAULT_CLASSIFIER_MODEL = os.getenv("LLM_CLASSIFIER_MODEL", "mistral-small-latest")
+DEFAULT_ADVISOR_MODEL = os.getenv("LLM_ADVISOR_MODEL", "mistral-small-latest")
 
 
 # ─── Layer 1: Classification ────────────────────────────────────

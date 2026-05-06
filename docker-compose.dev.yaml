@@ -1,0 +1,43 @@
+services:
+  dialogscribe:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: dialogscribe-dev
+    ports:
+      - "7860:7860"
+    environment:
+      # Transcription via Mistral Voxtral
+      - MISTRAL_API_KEY=C0OzOov5LJT5JI5os3ZDxJw96VIC7EiZ
+      - ASR_URL=https://api.mistral.ai
+      - ASR_MODEL=voxtral-mini-latest
+      # LLM for summary / insights / chat (Mistral OpenAI-compat)
+      - LLM_API_KEY=C0OzOov5LJT5JI5os3ZDxJw96VIC7EiZ
+      - LLM_BASE_URL=https://api.mistral.ai/v1
+      - LLM_MODEL=mistral-small-latest
+      # Auth
+      - JWT_SECRET=dev-secret-change-in-prod
+      - API_KEY=
+      # Database (SQLite inside container)
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/dialogscribe.db
+      # Server
+      - HOST=0.0.0.0
+      - PORT=7860
+      - MAX_UPLOAD_SIZE_MB=500
+      # Bootstrap admin
+      - ADMIN_EMAIL=admin@local.dev
+      - ADMIN_PASSWORD=admin123
+      # Frontend origin (CoPilot Sales dev server)
+      - FRONTEND_URL=http://localhost:5173
+    volumes:
+      - dialogscribe_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7860/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  dialogscribe_data:

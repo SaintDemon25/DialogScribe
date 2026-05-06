@@ -188,13 +188,13 @@ class TestTranscriptionResult:
         txt_path = temp_dir / "result.txt"
         sample_transcription_result.save(txt_path)
         assert txt_path.exists()
-        assert "Привет" in txt_path.read_text()
+        assert "Привет" in txt_path.read_text(encoding="utf-8")
 
         # JSON
         json_path = temp_dir / "result.json"
         sample_transcription_result.save(json_path, format="json")
         assert json_path.exists()
-        data = json.loads(json_path.read_text())
+        data = json.loads(json_path.read_text(encoding="utf-8"))
         assert "segments" in data
 
         # SRT
