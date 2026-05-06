@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 CONTEXT_WINDOW_TOKENS = 3000  # ~3 minutes of speech
 HINT_CATEGORIES = ["argumentative", "navigational"]
-HINT_GENERATION_INTERVAL = 10  # seconds between hint generations
+HINT_GENERATION_INTERVAL = 30  # seconds between hint generations
 
 # --- Hint Templates ---
 
@@ -242,7 +242,8 @@ def generate_hints(
     for hint in nav_hints:
         hint["hint_type"] = "navigational"
 
-    return arg_hints + nav_hints
+    # Limit total hints: max 1 argumentative + 1 navigational
+    return arg_hints[:1] + nav_hints[:1]
 
 
 def _normalize_hint(item: dict[str, object]) -> dict[str, str]:
