@@ -214,6 +214,107 @@ class MistralASRClient:
         logger.info("ASR complete: text_len=%d", len(text))
         return text
 
+    def transcribe_raw(
+        self,
+        audio_path: str,
+        content_type: str = "audio/webm",
+    ) -> str:
+        """Transcribe audio file directly — no soundfile/ffmpeg processing.
+
+        Sends raw file bytes to Mistral API with the given content type.
+        Use for formats Mistral accepts natively (webm, mp3, etc.).
+
+        Args:
+            audio_path: Path to the audio file.
+            content_type: MIME type for the upload (default: audio/webm).
+
+        Returns:
+            Transcribed text (may be empty string).
+        """
+        logger.info("ASR transcribe_raw: [path=%s, type=%s]", audio_path, content_type)
+
+        with open(audio_path, "rb") as f:
+            raw_bytes = f.read()
+
+        if not raw_bytes:
+            return ""
+
+        ext = content_type.split("/")[-1]
+
+        url = f"{self.asr_url}/v1/audio/transcriptions"
+
+        if self._min_request_interval > 0:
+            with self._rate_limit_lock:
+                now = time.monotonic()
+                elapsed = now - self._last_request_time
+                if elapsed < self._min_request_interval:
+                    time.sleep(self._min_request_interval - elapsed)
+                self._last_request_time = time.monotonic()
+
+        files = {
+            "file": (f"audio.{ext}", raw_bytes, content_type),
+        }
+        data = {"model": self.model}
+        headers: dict[str, str] = {}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            try:
+                response = self._client.post(url, headers=headers, files=files, data=data)
+                response.raise_for_status()
+            except httpx.TimeoutException as exc:
+                if attempt == max_retries:
+                    logger.exception("ASR raw timeout after %d attempts", max_retries)
+                    raise ASRError("таймаут запроса к ASR", cause=exc) from exc
+                backoff = min(1.0 * (2.0 ** attempt), 10.0)
+                logger.warning(
+                    "ASR raw timeout (attempt %d/%d), retry in %.1fs",
+                    attempt + 1,
+                    max_retries,
+                    backoff,
+                )
+                time.sleep(backoff)
+                continue
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in (429, 503) and attempt < max_retries:
+                    backoff = min(1.0 * (2.0 ** attempt), 10.0)
+                    logger.warning(
+                        "ASR raw status %d (attempt %d/%d), retry in %.1fs",
+                        exc.response.status_code,
+                        attempt + 1,
+                        max_retries,
+                        backoff,
+                    )
+                    time.sleep(backoff)
+                    continue
+                raise ASRError(
+                    f"HTTP {exc.response.status_code}: {exc.response.text}",
+                    cause=exc,
+                ) from exc
+            except httpx.RequestError as exc:
+                if attempt == max_retries:
+                    logger.exception("ASR raw request error after %d retries", max_retries)
+                    raise ASRError("ошибка HTTP-запроса к ASR", cause=exc) from exc
+                backoff = min(1.0 * (2.0 ** attempt), 10.0)
+                logger.warning(
+                    "ASR raw request error (attempt %d/%d), retry in %.1fs: %s",
+                    attempt + 1,
+                    max_retries,
+                    backoff,
+                    exc,
+                )
+                time.sleep(backoff)
+                continue
+
+            payload = response.json()
+            text = payload.get("text", "") or ""
+            logger.info("ASR transcribe_raw complete: text_len=%d", len(text))
+            return text
+
+        raise ASRError("не удалось получить ответ от ASR")
+
     def _parse_segment(self, segment: Any) -> _SegmentSpec:
         """Нормализация входного описания сегмента."""
         if isinstance(segment, dict):
