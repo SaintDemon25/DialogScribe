@@ -144,10 +144,14 @@ class TestGigaAMTranscriberLazyLoading:
 
         assert transcriber._audio_processor is None
 
-        processor = transcriber.audio_processor
+        with patch("gigaam_transcriber.transcriber.AudioProcessor") as MockAP:
+            mock_ap = MagicMock()
+            MockAP.return_value = mock_ap
 
-        assert processor is not None
-        assert transcriber._audio_processor is not None
+            processor = transcriber.audio_processor
+
+            assert processor is mock_ap
+            assert transcriber._audio_processor is mock_ap
 
 
 class TestGigaAMTranscriberGetModelInfo:
@@ -179,8 +183,13 @@ class TestGigaAMTranscriberValidation:
         bad_file = temp_dir / "test.xyz"
         bad_file.write_text("test")
 
-        with pytest.raises(UnsupportedFormatError):
-            transcriber._validate_input(bad_file)
+        with patch("gigaam_transcriber.transcriber.AudioProcessor") as MockAP:
+            mock_ap = MagicMock()
+            mock_ap.is_supported_file.return_value = False
+            MockAP.return_value = mock_ap
+
+            with pytest.raises(UnsupportedFormatError):
+                transcriber._validate_input(bad_file)
 
     def test_validate_nonexistent_file(self):
         """Тест с несуществующим файлом."""

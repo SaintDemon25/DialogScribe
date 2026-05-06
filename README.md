@@ -87,12 +87,26 @@ MAX_UPLOAD_SIZE_MB=100
 
 ### Сборка и запуск
 
+**Production:**
+
 ```bash
 docker compose build
 docker compose up -d
 ```
 
 Приложение будет доступно на `http://localhost:7860`.
+
+**Dev-режим (порт 7860 на хост, без GPU, без Vault):**
+
+```bash
+docker compose -f docker-compose.dev.yaml up -d --build
+```
+
+Для запуска тестов (488 тестов, не требуют GPU/HF-токен):
+
+```bash
+python -m pytest -m "not slow and not requires_gpu and not requires_hf_token and not requires_model"
+```
 
 ### Vault Agent
 
@@ -108,6 +122,7 @@ docker compose up -d
 | `POST /api/mindmap` | Генерация майндмапа (LLM) |
 | `POST /api/insights` | Извлечение инсайтов (LLM) |
 | `POST /api/chat` | Чат с контекстом транскрипции |
+| `WS /api/live-hints/ws` | Live-подсказки в реальном времени (WebSocket, JWT auth via query param) |
 | `GET /api/models` | Список доступных LLM-моделей |
 | Auth routes | Регистрация, логин, восстановление пароля |
 | Admin routes | Управление пользователями, лимитами |

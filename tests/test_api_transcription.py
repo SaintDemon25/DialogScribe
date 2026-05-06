@@ -85,7 +85,7 @@ class TestTranscribe:
         data = resp.json()
         assert data["segments"][0]["speaker"] == "Speaker 1"
         call_args = mock_t.transcribe.call_args
-        assert call_args.kwargs["diarization"] == "simple"
+        assert call_args.kwargs["diarization"] == "hybrid"
         assert call_args.kwargs["language"] == "en"
 
     def test_invalid_file_format(self, client):
