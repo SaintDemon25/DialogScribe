@@ -1,253 +1,377 @@
 # DialogScribe
 
-Self-hosted audio & video transcription service with speaker diarization, LLM-powered analysis, and a modern web UI.
+[DialogScribe](https://github.com/Timik232/DialogScribe)  
+based on GigaAm App wrapper
 
-Built on [GigaAM](https://github.com/salute-developers/GigaAM) for Russian speech recognition, [pyannote](https://huggingface.co/pyannote/speaker-diarization-3.1) for speaker diarization, and [Mistral Voxtral](https://mistral.ai) as an alternative ASR backend.
+Микробиблиотека для транскрипции аудио и видео файлов на базе [GigaAM](https://github.com/salute-developers/GigaAM) с опциональной диаризацией спикеров через pyannote.
 
-## Features
+## Возможности
 
-- **Transcription** — audio & video files up to 1 GB, powered by GigaAM or Voxtral API
-- **Speaker diarization** — identify who spoke and when, via pyannote 3.1
-- **LLM analysis** — automatic summaries, mind maps, and key insights via OpenAI-compatible API
-- **Saved transcriptions** — library with search, edit, and public sharing links
-- **Templates** — reusable prompt templates for analysis with import/export
-- **Autoflow** — end-to-end pipeline: upload → transcribe → analyze in one step
-- **Multi-user** — registration, login, admin panel, usage tracking
-- **Export** — TXT, JSON, SRT, VTT, DOCX, PDF
-- **REST API** — OpenAI `/v1/audio/transcriptions`-compatible endpoint
-- **Denoise** — optional audio pre-processing for noisy recordings
+- **Транскрипция аудио и видео** любой длительности
+- **Диаризация спикеров** через pyannote или гибридный подход
+- **Множество форматов вывода**: TXT, JSON, SRT, VTT
+- **Пакетная обработка** нескольких файлов
+- **CLI интерфейс** для командной строки
+- **Простой Python API** для интеграции в приложения
 
-## Architecture
+## Установка
 
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   SvelteKit SPA │────▶│   FastAPI backend │────▶│     GigaAM      │
-│   (frontend)    │     │   (api.py)        │     │   / Voxtral     │
-└─────────────────┘     ├──────────────────┤     └─────────────────┘
-                        │ PostgreSQL/SQLite│     ┌─────────────────┐
-                        │ (alembic migrations)│   │    pyannote     │
-                        ├──────────────────┤     │  diarization    │
-                        │ LLM (OpenAI-compat)│───▶│  (GPU required) │
-                        └──────────────────┘     └─────────────────┘
-```
+### Требования
 
-**Tech stack:**
-- **Backend:** Python 3.10+, FastAPI, SQLAlchemy (async), Alembic, uvicorn
-- **Frontend:** SvelteKit 5, TypeScript, Vite
-- **ML:** GigaAM, pyannote-audio 3.1, torch 2.8
-- **Infrastructure:** Docker, NVIDIA GPU runtime, HashiCorp Vault (secrets)
+- Python ≥ 3.10
+- [FFmpeg](https://ffmpeg.org/) установлен и доступен в PATH
+- CUDA (опционально, для ускорения на GPU)
 
-## Quick Start
-
-### Prerequisites
-
-- NVIDIA GPU with CUDA (required for GigaAM + pyannote)
-- [Docker](https://docs.docker.com/get-docker/) with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-- [HuggingFace token](https://huggingface.co/settings/tokens) with access to:
-  - [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0)
-  - [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
-
-### Configuration
+### Установка пакета
 
 ```bash
-# Clone the repository
+# 1. Клонировать репозиторий
 git clone https://github.com/Timik232/DialogScribe.git
 cd DialogScribe
 
-# Create environment file from template
-cp .env.example .env
-```
 
-Edit `.env` with your credentials:
-
-```env
-# Required: HuggingFace token for diarization models
-HF_TOKEN=hf_your_token_here
-
-# Required: Admin credentials (created on first startup)
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=your-secure-password
-
-# Required: Database URL
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/dialogscribe
-
-# Optional: LLM for analysis (OpenAI-compatible endpoint)
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4.1
-LLM_API_KEY=sk-your-key-here
-
-# Optional: Mistral Voxtral for alternative ASR
-MISTRAL_API_KEY=your_mistral_key_here
-```
-
-### Run with Docker
-
-```bash
-# Build and start
-docker compose build
-docker compose up -d
-```
-
-The service will be available at **http://localhost:7860**.
-
-First startup downloads GigaAM and pyannote models (~5-10 min depending on connection). Subsequent starts are near-instant.
-
-### Run without Docker
-
-```bash
-# Install system dependencies
-# - FFmpeg (apt install ffmpeg / brew install ffmpeg)
-# - Python 3.10+
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate
-
-# Install GigaAM
+# 2. Установить GigaAM
 git clone https://github.com/salute-developers/GigaAM.git
 pip install -e ./GigaAM
 
-# Install dependencies
+# 3. Установить зависимости
 pip install -r requirements.txt
+
+# 4. (Опционально) Установить зависимости для диаризации
 pip install -r requirements-diarization.txt
 
-# Run database migrations
-alembic upgrade head
-
-# Start the server
-python api.py
+# 5. Установить пакет
+pip install -e .
 ```
 
-## API Endpoints
+## Setup VENV
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+или venv\Scripts\activate  # Windows
 
-### Transcription
+### Настройка для диаризации
+
+Для использования диаризации спикеров необходим HuggingFace токен и доступ к моделям:
+
+1. **Создайте токен на [HuggingFace](https://huggingface.co/settings/tokens)**
+   - Нажмите "New token"
+   - Выберите права "Read"
+   - Скопируйте токен
+
+2. **Примите условия использования моделей:**
+   - [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) - нажмите "Agree and access repository"
+   - [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) - нажмите "Agree and access repository"
+   - [pyannote/speaker-diarization](https://huggingface.co/pyannote/speaker-diarization) - нажмите "Agree and access repository" (опционально, fallback)
+   - [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1)
+
+
+3. **Установите переменную окружения:**
 
 ```bash
-# OpenAI-compatible endpoint
-curl -X POST http://localhost:7860/v1/audio/transcriptions \
-  -F "file=@meeting.mp4" \
-  -F "model=whisper-1" \
-  -F "response_format=json"
+# Способ 1: экспорт в консоли
+export HF_TOKEN=your_actual_token_here
+
+# Способ 2: создать .env файл
+cp .env.example .env
+# Затем отредактировать .env и вставить ваш токен
 ```
 
-### Full Transcription with Diarization
+4. **Проверьте настройку:**
 
 ```bash
-curl -X POST http://localhost:7860/api/transcribe \
-  -H "Authorization: Bearer <token>" \
-  -F "file=@meeting.mp4" \
-  -F "diarization=pyannote" \
-  -F "num_speakers=3"
+python setup_diarization.py
 ```
 
-### Analysis
+Этот скрипт проверит доступ к моделям и поможет настроить диаризацию.
+
+## Быстрый старт
+
+### Python API
+
+```python
+from gigaam_transcriber import GigaAMTranscriber
+
+# Создание транскрибера
+transcriber = GigaAMTranscriber()
+
+# Простая транскрипция
+result = transcriber.transcribe("audio.wav")
+print(result.text)
+
+# С диаризацией спикеров
+result = transcriber.transcribe(
+    "meeting.mp4",
+    diarization="pyannote",
+    num_speakers=3
+)
+
+# Вывод по сегментам
+for seg in result.segments:
+    print(f"[{seg.start:.1f}-{seg.end:.1f}] {seg.speaker}: {seg.text}")
+
+# Сохранение в файл
+result.save("transcript.json", format="json")
+result.save("subtitles.srt")
+```
+
+### CLI
 
 ```bash
-# Generate summary + mind map + insights
-curl -X POST http://localhost:7860/api/analysis/analyze \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"transcription_id": 42, "template_id": 1}'
+# Простая транскрипция
+gigaam-transcribe audio.wav
+
+# С диаризацией
+gigaam-transcribe meeting.mp4 -d pyannote --speakers 3 -o meeting.txt
+
+# Вывод в JSON
+gigaam-transcribe interview.mp3 -d pyannote -f json -o interview.json
+
+# Субтитры SRT
+gigaam-transcribe video.mp4 -f srt -o subtitles.srt
+
+# Пакетная обработка
+gigaam-batch *.mp3 -o transcripts/ -d pyannote
 ```
 
-### Key Routes
+## API Reference
 
-| Route | Description |
-|-------|-------------|
-| `POST /v1/audio/transcriptions` | OpenAI-compatible transcription |
-| `POST /api/transcribe` | Full transcription with diarization options |
-| `POST /api/autoflow` | Upload → transcribe → analyze pipeline |
-| `POST /api/analysis/analyze` | LLM summary, mind map, insights |
-| `GET /api/exports/{id}/{format}` | Export as TXT/JSON/SRT/VTT/DOCX/PDF |
-| `POST /api/auth/login` | Session-based authentication |
-| `GET /api/templates` | Analysis template management |
-| `GET /api/saved-transcriptions` | Saved transcriptions library |
+### GigaAMTranscriber
 
-## Web UI
+Основной класс для транскрипции.
 
-The SvelteKit SPA provides:
+```python
+from gigaam_transcriber import GigaAMTranscriber
 
-- **Transcribe** — upload files, configure diarization, download results
-- **Transcriptions** — saved library with search, edit, share
-- **Analysis** — LLM-generated summaries, interactive mind maps, key insights
-- **Autoflow** — one-click pipeline from upload to analysis
-- **Templates** — manage analysis prompt templates
-- **Admin** — user management, usage stats (admin only)
-- **Auth** — registration, login, password reset via email
-
-## Project Structure
-
-```
-DialogScribe/
-├── api.py                          # FastAPI application entry point
-├── Dockerfile                      # Multi-stage build (frontend + backend)
-├── docker-compose.yaml             # Production deployment config
-├── entrypoint.sh                   # Vault secrets loader + DB migration
-├── requirements.txt                # Python dependencies
-├── alembic/                        # Database migrations
-├── frontend/                       # SvelteKit SPA
-│   ├── src/routes/                 # Page components
-│   └── static/                     # Static assets
-├── gigaam_transcriber/             # Core transcription library
-│   ├── transcriber.py              # GigaAM wrapper
-│   ├── audio_processor.py          # Audio/video preprocessing + denoise
-│   ├── diarization.py              # pyannote speaker diarization
-│   ├── summarizer.py               # LLM analysis (summary, insights)
-│   ├── mindmap.py                  # Interactive mind map generation
-│   ├── auth.py                     # User auth (bcrypt, JWT sessions)
-│   ├── database.py                 # SQLAlchemy async setup
-│   ├── models.py                   # ORM models
-│   ├── exporters.py                # DOCX/PDF export
-│   ├── template_manager.py         # Analysis prompt templates
-│   ├── cli.py                      # CLI interface
-│   └── ...
-├── routers/                        # FastAPI route handlers
-│   ├── auth.py                     # Login, register, password reset
-│   ├── transcription.py            # Transcription endpoints
-│   ├── analysis.py                 # LLM analysis endpoints
-│   ├── autoflow.py                 # End-to-end pipeline
-│   ├── exports.py                  # File export endpoints
-│   ├── templates.py                # Template CRUD
-│   ├── admin.py                    # Admin panel endpoints
-│   └── ...
-├── tests/                          # Test suite
-└── .env.example                    # Configuration template
+transcriber = GigaAMTranscriber(
+    model_name="v3_e2e_rnnt",  # Модель GigaAM
+    device="auto",             # "auto", "cuda", "cpu"
+    hf_token=None,            # HuggingFace токен (или из HF_TOKEN)
+    verbose=False             # Подробный вывод
+)
 ```
 
-## Configuration Reference
+#### Методы
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HF_TOKEN` | — | HuggingFace token (required for diarization) |
-| `MISTRAL_API_KEY` | — | Mistral API key (for Voxtral ASR) |
-| `ADMIN_EMAIL` | — | Admin email (created on first start) |
-| `ADMIN_PASSWORD` | — | Admin password |
-| `DATABASE_URL` | — | PostgreSQL or SQLite connection string |
-| `LLM_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible API endpoint |
-| `LLM_MODEL` | `gpt-4.1` | Model for summaries and analysis |
-| `LLM_API_KEY` | — | API key for LLM endpoint |
-| `MAX_UPLOAD_SIZE_MB` | `1024` | Maximum upload file size |
-| `SMTP_HOST` | — | SMTP server for password reset emails |
-| `SMTP_PORT` | `465` | SMTP port |
-| `SMTP_USER` | — | SMTP username |
-| `SMTP_PASSWORD` | — | SMTP password |
+##### transcribe()
 
-## Testing
+```python
+result = transcriber.transcribe(
+    input_path,                    # Путь к файлу
+    output_path=None,              # Путь для сохранения
+    diarization="none",            # "none", "pyannote", "hybrid"
+    num_speakers=None,             # Количество спикеров
+    output_format="txt",           # "txt", "json", "srt", "vtt"
+    merge_same_speaker=True,       # Объединять сегменты одного спикера
+    min_segment_gap=0.5           # Gap для объединения (сек)
+)
+```
+
+##### audio2text() / video2text()
+
+```python
+# Транскрипция аудио
+result = transcriber.audio2text("audio.wav", diarization="pyannote")
+
+# Транскрипция видео
+result = transcriber.video2text("video.mp4", diarization="pyannote")
+```
+
+##### transcribe_batch()
+
+```python
+results = transcriber.transcribe_batch(
+    ["file1.mp3", "file2.mp4"],
+    output_dir="transcripts/",
+    diarization="pyannote"
+)
+```
+
+### TranscriptionResult
+
+Результат транскрипции.
+
+```python
+result.text         # Полный текст
+result.segments     # Список сегментов
+result.duration     # Длительность (сек)
+result.language     # Язык
+result.model_name   # Модель
+
+# Форматирование
+result.to_txt()     # Текст с таймкодами
+result.to_json()    # JSON
+result.to_srt()     # Субтитры SRT
+result.to_vtt()     # Субтитры VTT
+
+# Сохранение
+result.save("output.txt")
+result.save("output.json", format="json")
+
+# Утилиты
+result.get_speakers()              # Список спикеров
+result.filter_by_speaker("Спикер №1")  # Фильтрация
+```
+
+### TranscriptionSegment
+
+Сегмент транскрипции.
+
+```python
+segment.text       # Текст сегмента
+segment.start      # Начало (сек)
+segment.end        # Конец (сек)
+segment.speaker    # Спикер
+segment.duration   # Длительность
+```
+
+## Модели GigaAM
+
+| Модель | Описание | Рекомендация |
+|--------|----------|--------------|
+| `v3_e2e_rnnt` | С пунктуацией и нормализацией (RNNT) | **Рекомендуется** |
+| `v3_e2e_ctc` | С пунктуацией и нормализацией (CTC) | Альтернатива |
+| `v3_rnnt` | Без пунктуации (RNNT) | - |
+| `v3_ctc` | Без пунктуации (CTC) | - |
+
+## Форматы вывода
+
+### TXT (с диаризацией)
+```
+[00:00:00 - 00:17:41] Спикер №1: текст...
+[00:18:98 - 00:39:26] Спикер №2: текст...
+```
+
+### JSON
+```json
+{
+  "metadata": {
+    "source": "meeting.mp4",
+    "duration": 3600.5,
+    "speakers_count": 3
+  },
+  "segments": [...],
+  "full_text": "..."
+}
+```
+
+### SRT
+```
+1
+00:00:00,000 --> 00:00:17,410
+[Спикер №1] текст...
+```
+
+### VTT
+```
+WEBVTT
+
+00:00:00.000 --> 00:00:17.410
+[Спикер №1] текст...
+```
+
+## Режимы диаризации
+
+- **none** — без диаризации, только транскрипция
+- **pyannote** — полная диаризация через pyannote/speaker-diarization-3.1
+- **hybrid** — гибридный подход: VAD + эмбеддинги + кластеризация (легче, но менее точно)
+
+## Примеры
+
+### Транскрипция совещания
+
+```python
+from gigaam_transcriber import GigaAMTranscriber
+
+with GigaAMTranscriber() as transcriber:
+    result = transcriber.transcribe(
+        "meeting.mp4",
+        diarization="pyannote",
+        num_speakers=4,
+        output_format="json"
+    )
+    
+    # Статистика по спикерам
+    for speaker in result.get_speakers():
+        filtered = result.filter_by_speaker(speaker)
+        duration = sum(s.duration for s in filtered.segments)
+        print(f"{speaker}: {duration:.0f} сек")
+    
+    result.save("meeting_transcript.json")
+```
+
+### Создание субтитров для видео
+
+```python
+from gigaam_transcriber import GigaAMTranscriber
+
+transcriber = GigaAMTranscriber()
+result = transcriber.transcribe("video.mp4")
+
+# SRT субтитры
+result.save("subtitles.srt")
+
+# WebVTT субтитры
+result.save("subtitles.vtt")
+```
+
+### Пакетная обработка
+
+```python
+from gigaam_transcriber import GigaAMTranscriber
+from pathlib import Path
+
+transcriber = GigaAMTranscriber()
+
+audio_files = list(Path("recordings").glob("*.mp3"))
+
+def progress(current, total, filename):
+    print(f"Processing {current}/{total}: {filename}")
+
+results = transcriber.transcribe_batch(
+    audio_files,
+    output_dir="transcripts",
+    diarization="pyannote",
+    progress_callback=progress
+)
+
+print(f"Processed {len(results)} files")
+```
+
+## Структура проекта
+
+```
+gigaam_transcriber/
+├── __init__.py           # Публичный API
+├── transcriber.py        # Основной класс GigaAMTranscriber
+├── audio_processor.py    # Обработка аудио/видео
+├── diarization.py        # Диаризация спикеров
+├── segment_merger.py     # Сшивка сегментов
+├── formatters.py         # Форматирование вывода
+├── data_models.py        # Структуры данных
+├── exceptions.py         # Исключения
+├── utils.py              # Утилиты
+└── cli.py                # CLI интерфейс
+```
+
+## Тестирование
 
 ```bash
-# Run all tests
+# Запуск всех тестов
 pytest tests/ -v
 
-# Fast tests (no GPU, no model downloads)
-pytest tests/ -v -m "not requires_gpu"
+# Тесты без модели (быстрые)
+pytest tests/ -v -m "not requires_model"
+
+# Тесты с моделью (требуют GPU)
+pytest tests/ -v -m requires_model
 ```
 
-## License
+## Лицензия
 
-MIT
+MIT License
 
-## Acknowledgements
+## Ссылки
 
-- [GigaAM](https://github.com/salute-developers/GigaAM) — Russian speech recognition model
-- [pyannote-audio](https://github.com/pyannote/pyannote-audio) — Speaker diarization
-- [Mistral Voxtral](https://mistral.ai) — Alternative ASR backend
+- [GigaAM GitHub](https://github.com/salute-developers/GigaAM)
+- [GigaAM paper (arXiv)](https://arxiv.org/abs/2506.01192)
+- [pyannote speaker-diarization](https://huggingface.co/pyannote/speaker-diarization-3.1)
