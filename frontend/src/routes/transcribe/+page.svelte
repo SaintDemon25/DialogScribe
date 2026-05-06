@@ -34,6 +34,7 @@
 	let result: TranscriptionResult | null = $state(null);
 	let activeTab = $state<'segments' | 'text'>('segments');
 	let copySuccess = $state(false);
+	let copySegmentsSuccess = $state(false);
 	let speakerNames: Record<string, string> = $state({});
 	let editingSpeaker: string | null = $state(null);
 	let editingSpeakerValue = $state('');
@@ -190,6 +191,22 @@
 		}
 	}
 
+	async function copySegmentsText(): Promise<void> {
+		if (!result?.segments) return;
+		try {
+			const lines = result.segments.map((seg) => {
+				const time = `[${formatTimestamp(seg.start)} – ${formatTimestamp(seg.end)}]`;
+				const speaker = seg.speaker ? ` ${speakerNames[seg.speaker] || seg.speaker}:` : '';
+				return `${time}${speaker} ${seg.text}`;
+			});
+			await navigator.clipboard.writeText(lines.join('\n'));
+			copySegmentsSuccess = true;
+			setTimeout(() => { copySegmentsSuccess = false; }, 2000);
+		} catch {
+			/* clipboard unavailable */
+		}
+	}
+
 	function generateDefaultTitle(r: TranscriptionResult): string {
 		const now = new Date();
 		const pad = (n: number) => String(n).padStart(2, '0');
@@ -320,39 +337,53 @@
 			</div>
 
 			{#if activeTab === 'segments'}
-				<div class="segments-list">
-					{#each result.segments as seg, i}
-						<div class="segment">
-							<span class="segment-time">
-								[{formatTimestamp(seg.start)} – {formatTimestamp(seg.end)}]
-							</span>
-							{#if seg.speaker}
-								{#if editingSpeaker === seg.speaker}
-									<input
-										class="speaker-input"
-										type="text"
-										bind:value={editingSpeakerValue}
-										placeholder={seg.speaker}
-										onkeydown={(e) => {
-											if (e.key === 'Enter') saveSpeakerName(seg.speaker);
-											if (e.key === 'Escape') cancelSpeakerEdit();
-										}}
-										onblur={() => saveSpeakerName(seg.speaker)}
-									/>
-								{:else}
-									<span
-										class="speaker-badge clickable"
-										style="color: {speakerColor(seg.speaker)}; border-color: {speakerColor(seg.speaker)}"
-										onclick={() => startSpeakerEdit(seg.speaker)}
-										title="Нажмите чтобы переименовать"
-									>
-										{speakerNames[seg.speaker] || seg.speaker}
-									</span>
+				<div class="segments-wrapper" style="position: relative;">
+					<button class="copy-btn" onclick={copySegmentsText} title="Копировать">
+						{#if copySegmentsSuccess}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="20 6 9 17 4 12"/>
+							</svg>
+						{:else}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+								<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+							</svg>
+						{/if}
+					</button>
+					<div class="segments-list">
+						{#each result.segments as seg, i}
+							<div class="segment">
+								<span class="segment-time">
+									[{formatTimestamp(seg.start)} – {formatTimestamp(seg.end)}]
+								</span>
+								{#if seg.speaker}
+									{#if editingSpeaker === seg.speaker}
+										<input
+											class="speaker-input"
+											type="text"
+											bind:value={editingSpeakerValue}
+											placeholder={seg.speaker}
+											onkeydown={(e) => {
+												if (e.key === 'Enter') saveSpeakerName(seg.speaker);
+												if (e.key === 'Escape') cancelSpeakerEdit();
+											}}
+											onblur={() => saveSpeakerName(seg.speaker)}
+										/>
+									{:else}
+										<span
+											class="speaker-badge clickable"
+											style="color: {speakerColor(seg.speaker)}; border-color: {speakerColor(seg.speaker)}"
+											onclick={() => startSpeakerEdit(seg.speaker)}
+											title="Нажмите чтобы переименовать"
+										>
+											{speakerNames[seg.speaker] || seg.speaker}
+										</span>
+									{/if}
 								{/if}
-							{/if}
-							<span class="segment-text">{seg.text}</span>
-						</div>
-					{/each}
+								<span class="segment-text">{seg.text}</span>
+							</div>
+						{/each}
+					</div>
 				</div>
 			{:else}
 				<div class="fulltext-wrapper">

@@ -69,9 +69,10 @@ gigaam-transcribe = "gigaam_transcriber.cli:main"
 gigaam-batch = "gigaam_transcriber.cli:batch_main"
 
 [project.urls]
-Homepage = "https://github.com/Timik232/DialogScribe"
-Documentation = "https://github.com/Timik232/DialogScribe#readme"
-Repository = "https://github.com/Timik232/DialogScribe"
+# TODO: Replace with actual repository URLs
+Homepage = "https://github.com/yaruslove/DialogScribe"
+Documentation = "https://github.com/yaruslove/DialogScribe#readme"
+Repository = "https://github.com/yaruslove/DialogScribe"
 
 [tool.setuptools.packages.find]
 where = ["."]

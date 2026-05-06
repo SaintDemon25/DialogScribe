@@ -39,6 +39,8 @@
 	let sharing = $state(false);
 	let analyzing = $state(false);
 	let toast = $state('');
+	let copySuccess = $state(false);
+	let copyAnalysisSuccess = $state(false);
 	let analysisPolling = $state(false);
 	let analysisPollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -217,6 +219,27 @@
 		analysisPolling = false;
 	}
 
+	async function copyFullText() {
+		try {
+			await navigator.clipboard.writeText(editText);
+			copySuccess = true;
+			setTimeout(() => { copySuccess = false; }, 2000);
+		} catch {
+			/* clipboard unavailable */
+		}
+	}
+
+	async function copyAnalysisText() {
+		if (!selectedDetail?.analysis_text) return;
+		try {
+			await navigator.clipboard.writeText(selectedDetail.analysis_text);
+			copyAnalysisSuccess = true;
+			setTimeout(() => { copyAnalysisSuccess = false; }, 2000);
+		} catch {
+			/* clipboard unavailable */
+		}
+	}
+
 	function showToast(msg: string) {
 		toast = msg;
 		setTimeout(() => {
@@ -284,14 +307,38 @@
 					<input type="text" class="input" bind:value={editTitle} />
 				</div>
 
-				<div class="field">
+				<div class="field" style="position: relative;">
 					<label>Текст</label>
+					<button class="copy-btn" onclick={copyFullText} title="Копировать">
+						{#if copySuccess}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="20 6 9 17 4 12"/>
+							</svg>
+						{:else}
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+								<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+							</svg>
+						{/if}
+					</button>
 					<textarea class="input" bind:value={editText} rows="15" style="resize: vertical;"></textarea>
 				</div>
 
 				{#if selectedDetail.analysis_text}
-					<div class="analysis-section">
+					<div class="analysis-section" style="position: relative;">
 						<label>Анализ</label>
+						<button class="copy-btn" onclick={copyAnalysisText} title="Копировать">
+							{#if copyAnalysisSuccess}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<polyline points="20 6 9 17 4 12"/>
+								</svg>
+							{:else}
+								<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+									<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+								</svg>
+							{/if}
+						</button>
 						<div class="analysis-content">{selectedDetail.analysis_text}</div>
 					</div>
 				{/if}
@@ -550,6 +597,24 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
+	}
+
+	.copy-btn {
+		position: absolute;
+		top: 0;
+		right: 0;
+		background: var(--color-card, var(--color-bg));
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		padding: 0.375rem;
+		cursor: pointer;
+		color: var(--color-muted);
+		transition: color 0.15s, border-color 0.15s;
+	}
+
+	.copy-btn:hover {
+		color: var(--color-cta);
+		border-color: var(--color-cta);
 	}
 
 	.analysis-section label {

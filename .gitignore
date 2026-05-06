@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+GigaAM/
+
 # C extensions
 *.so
 
@@ -76,13 +78,9 @@ venv.bak/
 .env.*.local
 
 # Secrets and tokens
-vault/
 *token*.txt
 *credentials*.txt
 secrets.txt
-
-# GigaAM submodule
-GigaAM/
 
 # Model files and datasets (large files)
 *.pth
@@ -147,16 +145,19 @@ cython_debug/
 # pyro
 *.pyro
 
-# AI/Dev tools (not part of the project)
-.sisyphus/
-.opencode/
-.claude/
-.playwright-mcp/
-AGENTS.md
-openspec/
-my_py_venv.txt
-
-# Frontend
 frontend/node_modules/
 frontend/.svelte-kit/
 frontend/build/
+
+# Sisyphus work tracking (local only)
+.sisyphus/
+
+# Playwright MCP state
+.playwright-mcp/
+
+# Vault secrets
+vault/
+
+# Stray files in project root
+/*.png
+my_py_venv.txt
