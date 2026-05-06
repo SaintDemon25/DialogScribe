@@ -32,6 +32,7 @@
 
 	function handleBlur(): void {
 		goalTouched = true;
+		if (!goal) return;
 		onsubmit?.({ goal, offering, red_lines, known_objections });
 	}
 </script>

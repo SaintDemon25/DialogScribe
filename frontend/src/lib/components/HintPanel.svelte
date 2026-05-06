@@ -21,7 +21,7 @@
 
 	let sortedHints = $derived([...hints].sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]));
 
-	const expandedRationales: Set<string> = new Set();
+	let expandedRationales = $state(new Set<string>());
 
 	function toggleRationale(key: string) {
 		if (expandedRationales.has(key)) {

@@ -46,8 +46,11 @@ class BriefUpdateMessage(BaseModel):
 
     def apply_to(self, brief: MeetingBrief) -> MeetingBrief:
         """Merge updates into existing brief, only overwriting non-None fields."""
-        if self.goal is not None:
-            brief.goal = MeetingGoal(self.goal)
+        if self.goal is not None and self.goal.strip():
+            try:
+                brief.goal = MeetingGoal(self.goal)
+            except ValueError:
+                pass
         if self.offering is not None:
             brief.offering = self.offering
         if self.red_lines is not None:

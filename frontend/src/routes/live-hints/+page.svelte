@@ -23,7 +23,7 @@
 	let hints: Array<{
 		hint_type: 'argumentative' | 'navigational' | 'tactical' | 'strategic' | 'warning' | 'analytical';
 		text: string;
-		priority: 'high' | 'medium' | 'low';
+		priority: 'critical' | 'high' | 'medium' | 'low';
 		hint_id?: string;
 		rationale?: string;
 	}> = $state([]);

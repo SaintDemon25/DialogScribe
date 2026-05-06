@@ -1,6 +1,6 @@
 # DialogScribe
 
-[DialogScribe](https://github.com/yaruslove/DialogScribe.git)  
+[DialogScribe](https://github.com/Timik232/DialogScribe)  
 based on GigaAm App wrapper
 
 Микробиблиотека для транскрипции аудио и видео файлов на базе [GigaAM](https://github.com/salute-developers/GigaAM) с опциональной диаризацией спикеров через pyannote.
@@ -26,8 +26,8 @@ based on GigaAm App wrapper
 
 ```bash
 # 1. Клонировать репозиторий
-git clone https://github.com/yaruslove/DialogScribe.git
-cd https://github.com/yaruslove/DialogScribe
+git clone https://github.com/Timik232/DialogScribe.git
+cd DialogScribe
 
 
 # 2. Установить GigaAM

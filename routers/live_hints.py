@@ -77,6 +77,7 @@ async def live_hints_ws(ws: WebSocket):
 
     session_config: dict[str, str] | None = None
     transcript_segments: list[str] = []
+    MAX_TRANSCRIPT_SEGMENTS = 500
     last_hint_time: float = 0.0
     processing: bool = False
 
@@ -148,7 +149,8 @@ async def live_hints_ws(ws: WebSocket):
                     )
                     continue
 
-                # ── Prevent concurrent chunk processing ────────
+                # ── Backpressure: drop chunk while previous one is still processing ─
+                # Prevents unbounded queue growth and memory pressure on the server.
                 if processing:
                     await ws.send_json(
                         StatusMessage(status="processing").model_dump()
@@ -211,6 +213,8 @@ async def live_hints_ws(ws: WebSocket):
                     now = time.time()
                     segment = f"{prefix} {text.strip()}"
                     transcript_segments.append(segment)
+                    if len(transcript_segments) > MAX_TRANSCRIPT_SEGMENTS:
+                        transcript_segments = transcript_segments[-MAX_TRANSCRIPT_SEGMENTS:]
 
                     await ws.send_json(
                         TranscriptMessage(
@@ -225,8 +229,8 @@ async def live_hints_ws(ws: WebSocket):
                     accumulator.update_phase_from_text(text.strip())
 
                     # ── Live Advisor: event detection ───────────────
-                    keyword_events = event_detector.process_transcript_chunk(text.strip())
                     pause_event = event_detector.check_pause(now)
+                    keyword_events = event_detector.process_transcript_chunk(text.strip())
                     timer_fired = event_detector.should_trigger_timer(now)
 
                     # Determine trigger event (priority: keyword > pause > timer)
@@ -270,8 +274,8 @@ async def live_hints_ws(ws: WebSocket):
                                             ),
                                             text=hint.text,
                                             priority=cast(
-                                                Literal["high", "medium", "low"],
-                                                hint.priority.value if hint.priority.value in ("high", "medium", "low") else "medium",
+                                                Literal["critical", "high", "medium", "low"],
+                                                hint.priority.value if hint.priority.value in ("critical", "high", "medium", "low") else "medium",
                                             ),
                                             hint_id=hint.hint_id,
                                             rationale=hint.rationale,
@@ -304,7 +308,7 @@ async def live_hints_ws(ws: WebSocket):
                                     HintMessage(
                                         hint_type=cast(Literal["argumentative", "navigational"], hint.get("hint_type", "argumentative")),
                                         text=hint.get("text", ""),
-                                        priority=cast(Literal["high", "medium", "low"], hint.get("priority", "medium")),
+                                        priority=cast(Literal["critical", "high", "medium", "low"], hint.get("priority", "medium")),
                                     ).model_dump()
                                 )
                         except Exception as e:
@@ -353,8 +357,8 @@ async def live_hints_ws(ws: WebSocket):
                                 ),
                                 text=hint.text,
                                 priority=cast(
-                                    Literal["high", "medium", "low"],
-                                    hint.priority.value if hint.priority.value in ("high", "medium", "low") else "medium",
+                                    Literal["critical", "high", "medium", "low"],
+                                    hint.priority.value if hint.priority.value in ("critical", "high", "medium", "low") else "medium",
                                 ),
                                 hint_id=hint.hint_id,
                                 rationale=hint.rationale,
@@ -376,7 +380,7 @@ async def live_hints_ws(ws: WebSocket):
                                 HintMessage(
                                     hint_type=cast(Literal["argumentative", "navigational"], h.get("hint_type", "argumentative")),
                                     text=h.get("text", ""),
-                                    priority=cast(Literal["high", "medium", "low"], h.get("priority", "medium")),
+                                    priority=cast(Literal["critical", "high", "medium", "low"], h.get("priority", "medium")),
                                 ).model_dump()
                             )
                         last_hint_time = time.time()

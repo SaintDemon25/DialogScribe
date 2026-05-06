@@ -14,6 +14,8 @@
 
 	let { segments = [], children }: Props = $props();
 
+	const sessionStart = $derived(segments.length > 0 ? segments[0].timestamp : 0);
+
 	const speakerLabels: Record<string, string> = {
 		user: 'Вы',
 		opponent: 'Оппонент'
@@ -48,7 +50,7 @@
 						{speakerLabels[segment.speaker]}
 					</span>
 					<span class="transcript-text">{segment.text}</span>
-					<span class="transcript-time">{formatTime(segment.timestamp)}</span>
+					<span class="transcript-time">{formatTime(Math.max(0, segment.timestamp - sessionStart))}</span>
 				</li>
 			{/each}
 		</ul>

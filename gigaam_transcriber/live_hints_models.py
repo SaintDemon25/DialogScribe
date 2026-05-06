@@ -20,7 +20,7 @@ class AudioChunkMessage(BaseModel):
     """Аудиочанк, отправляемый клиентом через WebSocket.
 
     Поля:
-        audio_b64: Base64-кодированные аудиоданные (PCM/WAV).
+        audio_b64: Base64-кодированные аудиоданные (WebM/Opus).
         source: Источник аудио — «mic» (микрофон) или «tab» (вкладка браузера).
     """
 
@@ -93,7 +93,7 @@ class HintMessage(BaseModel):
     type: Literal["hint"] = "hint"
     hint_type: Literal["argumentative", "navigational", "tactical", "strategic", "warning", "analytical"]
     text: str
-    priority: Literal["high", "medium", "low"]
+    priority: Literal["critical", "high", "medium", "low"]
     hint_id: Optional[str] = None
     rationale: Optional[str] = None
 
