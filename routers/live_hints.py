@@ -246,7 +246,8 @@ async def live_hints_ws(ws: WebSocket):
 
                     # ── Live Advisor: cascade hint generation ───────
                     cascade_hint_sent = False
-                    if trigger_event and event_detector.should_trigger(trigger_event):
+                    min_cascade_interval = 20.0  # seconds between cascade hints
+                    if trigger_event and event_detector.should_trigger(trigger_event) and (now - last_hint_time) >= min_cascade_interval:
                         event_detector.mark_event_processed()
                         event_detector.reset_timer()
 
