@@ -76,6 +76,7 @@ venv.bak/
 .env
 .env.local
 .env.*.local
+.env.dev
 
 # Secrets and tokens
 *token*.txt

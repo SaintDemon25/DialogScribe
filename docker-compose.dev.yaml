@@ -6,28 +6,17 @@ services:
     container_name: dialogscribe-dev
     ports:
       - "7860:7860"
+    env_file:
+      - .env.dev
     environment:
-      # Transcription via Mistral Voxtral
-      - MISTRAL_API_KEY=REDACTED_KEY
       - ASR_URL=https://api.mistral.ai
       - ASR_MODEL=voxtral-mini-latest
-      # LLM for summary / insights / chat (Mistral OpenAI-compat)
-      - LLM_API_KEY=REDACTED_KEY
       - LLM_BASE_URL=https://api.mistral.ai/v1
       - LLM_MODEL=mistral-small-latest
-      # Auth
-      - JWT_SECRET=dev-secret-change-in-prod
-      - API_KEY=
-      # Database (SQLite inside container)
       - DATABASE_URL=sqlite+aiosqlite:////app/data/dialogscribe.db
-      # Server
       - HOST=0.0.0.0
       - PORT=7860
       - MAX_UPLOAD_SIZE_MB=500
-      # Bootstrap admin
-      - ADMIN_EMAIL=admin@local.dev
-      - ADMIN_PASSWORD=admin123
-      # Frontend origin (CoPilot Sales dev server)
       - FRONTEND_URL=http://localhost:5173
     volumes:
       - dialogscribe_data:/app/data
