@@ -98,3 +98,17 @@ class SavedTranscription(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
 
     user = relationship("User", backref="saved_transcriptions")
+
+
+class MeetingPrepPlan(Base):
+    __tablename__ = "meeting_prep_plans"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    company_data: Mapped[str] = mapped_column(Text, nullable=False)
+    catalog_data: Mapped[str] = mapped_column(Text, nullable=False)
+    result_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    model_used: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    user = relationship("User", backref="meeting_prep_plans")
