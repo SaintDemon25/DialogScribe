@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import tempfile
@@ -111,7 +112,7 @@ async def transcribe(
 ) -> dict:
     await check_limit(db, user.id, "transcription_minutes")
     transcriber = request.app.state.transcriber
-    result = _transcribe_upload(file, diarization_mode, language, transcriber, denoise=denoise)
+    result = await asyncio.to_thread(_transcribe_upload, file, diarization_mode, language, transcriber, denoise=denoise)
     duration_minutes = result.get("duration", 0) / 60
     await track_usage(db, user.id, "transcription_minutes", duration_minutes)
     await track_usage(db, user.id, "file_upload", 1.0)
@@ -130,7 +131,7 @@ async def transcribe_microphone(
 ) -> dict:
     await check_limit(db, user.id, "transcription_minutes")
     transcriber = request.app.state.transcriber
-    result = _transcribe_upload(file, diarization_mode, language, transcriber, denoise=denoise)
+    result = await asyncio.to_thread(_transcribe_upload, file, diarization_mode, language, transcriber, denoise=denoise)
     duration_minutes = result.get("duration", 0) / 60
     await track_usage(db, user.id, "transcription_minutes", duration_minutes)
     return result
