@@ -21,15 +21,6 @@ def _ensure_llm() -> None:
         raise HTTPException(status_code=503, detail="LLM_API_KEY not configured")
 
 
-def _maybe_update_model(model: str | None) -> None:
-    if model and model != llm_client.config.model:
-        llm_client.update_config(
-            llm_client.config.base_url,
-            llm_client.config.api_key,
-            model,
-        )
-
-
 @router.post("/meeting-prep", response_model=MeetingPrepResponse)
 async def post_meeting_prep(
     body: MeetingPrepRequest,
@@ -37,12 +28,13 @@ async def post_meeting_prep(
     db: AsyncSession = Depends(get_db),
 ):
     _ensure_llm()
-    _maybe_update_model(body.model)
     await check_limit(db, user.id, "llm_call")
 
     try:
+        model_override = body.model if body.model and body.model != llm_client.config.model else None
         result, model_used = await generate_meeting_prep(
-            body.company_data, body.catalog_data, llm_client
+            body.company_data, body.catalog_data, llm_client,
+            model_override=model_override,
         )
         plan = MeetingPrepPlan(
             user_id=user.id,
@@ -63,7 +55,7 @@ async def post_meeting_prep(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ConnectionError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=502, detail="LLM service unavailable") from exc
     except Exception as exc:
         logger.exception("Meeting prep generation failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Meeting prep generation failed") from exc

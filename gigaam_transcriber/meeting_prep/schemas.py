@@ -1,9 +1,9 @@
-from pydantic import BaseModel, field_validator, UUID4
+from pydantic import BaseModel, Field, field_validator, UUID4
 
 
 class MeetingPrepRequest(BaseModel):
-    company_data: str
-    catalog_data: str
+    company_data: str = Field(max_length=50_000)
+    catalog_data: str = Field(max_length=50_000)
     model: str | None = None
 
     @field_validator("company_data", "catalog_data", mode="after")
