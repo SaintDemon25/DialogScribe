@@ -182,7 +182,7 @@ class AudioAdapter:
             transcription = await self._asr_client.transcribe_raw(
                 wav_bytes, "audio.wav"
             )
-            return transcription.text if transcription.text else ""
+            return transcription if transcription else ""
         except ASRError:
             raise
         except Exception as exc:

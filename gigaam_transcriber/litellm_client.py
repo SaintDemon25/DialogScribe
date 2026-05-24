@@ -96,10 +96,7 @@ class LiteLLMASRClient(ASRProviderBase):
         language: str | None = None,
         diarization: bool = True,
         denoise: bool = False,
-    ) -> TranscriptionResult:
-        import time as _time
-
-        t0 = _time.monotonic()
+    ) -> str:
         with open(audio_path, "rb") as f:
             raw = f.read()
 
@@ -109,48 +106,21 @@ class LiteLLMASRClient(ASRProviderBase):
         if language:
             data["language"] = language
 
-        text = await self._post_transcription(files, data)
-
-        elapsed = _time.monotonic() - t0
-        return TranscriptionResult(
-            text=text,
-            segments=[
-                TranscriptionSegment(text=text, start=0.0, end=0.0),
-            ],
-            duration=0.0,
-            language=language or "unknown",
-            model_name=self._model,
-            processing_time=elapsed,
-        )
+        return await self._post_transcription(files, data)
 
     async def transcribe_raw(
         self,
         audio_bytes: bytes,
         filename: str,
         language: str | None = None,
-    ) -> TranscriptionResult:
-        import time as _time
-
-        t0 = _time.monotonic()
+    ) -> str:
         ext = filename.rsplit(".", 1)[-1] if "." in filename else "wav"
         files = {"file": (filename, audio_bytes, f"audio/{ext}")}
         data: dict[str, Any] = {"model": self._model}
         if language:
             data["language"] = language
 
-        text = await self._post_transcription(files, data)
-
-        elapsed = _time.monotonic() - t0
-        return TranscriptionResult(
-            text=text,
-            segments=[
-                TranscriptionSegment(text=text, start=0.0, end=0.0),
-            ],
-            duration=0.0,
-            language=language or "unknown",
-            model_name=self._model,
-            processing_time=elapsed,
-        )
+        return await self._post_transcription(files, data)
 
     async def transcribe_segments(
         self,

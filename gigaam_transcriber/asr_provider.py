@@ -33,8 +33,8 @@ class ASRProviderBase(abc.ABC):
         language: str | None = None,
         diarization: bool = True,
         denoise: bool = False,
-    ) -> TranscriptionResult:
-        """Transcribe a full audio file."""
+    ) -> str:
+        """Transcribe a full audio file. Returns transcribed text."""
 
     @abc.abstractmethod
     async def transcribe_raw(
@@ -42,8 +42,8 @@ class ASRProviderBase(abc.ABC):
         audio_bytes: bytes,
         filename: str,
         language: str | None = None,
-    ) -> TranscriptionResult:
-        """Transcribe raw audio bytes (no pre-processing)."""
+    ) -> str:
+        """Transcribe raw audio bytes (no pre-processing). Returns transcribed text."""
 
     @abc.abstractmethod
     async def transcribe_segments(
@@ -83,9 +83,9 @@ class FallbackASRProvider(ASRProviderBase):
         language: str | None = None,
         diarization: bool = True,
         denoise: bool = False,
-    ) -> TranscriptionResult:
+    ) -> str:
         try:
-            return await self._primary.transcribe(audio_path, language, diarization, denoise)
+            return await self._primary.transcribe(audio_path)
         except Exception as primary_exc:
             logger.warning(
                 "ASR primary provider %s failed (transcribe), falling back to %s: %s",
@@ -93,14 +93,14 @@ class FallbackASRProvider(ASRProviderBase):
                 self._secondary_name,
                 primary_exc,
             )
-            return await self._secondary.transcribe(audio_path, language, diarization, denoise)
+            return await self._secondary.transcribe(audio_path)
 
     async def transcribe_raw(
         self,
         audio_bytes: bytes,
         filename: str,
         language: str | None = None,
-    ) -> TranscriptionResult:
+    ) -> str:
         try:
             return await self._primary.transcribe_raw(audio_bytes, filename, language)
         except Exception as primary_exc:
