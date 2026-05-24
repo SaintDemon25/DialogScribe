@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+import asyncio
 import enum
 import logging
 import os
@@ -65,6 +66,12 @@ class FallbackASRProvider(ASRProviderBase):
     Fallback is per-request only — the stored preference is never mutated.
     """
 
+    async def _invoke(self, provider, method_name: str, *args, **kwargs):
+        method = getattr(provider, method_name)
+        if asyncio.iscoroutinefunction(method):
+            return await method(*args, **kwargs)
+        return await asyncio.to_thread(method, *args, **kwargs)
+
     def __init__(
         self,
         primary: ASRProviderBase,
@@ -85,7 +92,7 @@ class FallbackASRProvider(ASRProviderBase):
         denoise: bool = False,
     ) -> str:
         try:
-            return await self._primary.transcribe(audio_path)
+            return await self._invoke(self._primary, "transcribe", audio_path)
         except Exception as primary_exc:
             logger.warning(
                 "ASR primary provider %s failed (transcribe), falling back to %s: %s",
@@ -93,7 +100,7 @@ class FallbackASRProvider(ASRProviderBase):
                 self._secondary_name,
                 primary_exc,
             )
-            return await self._secondary.transcribe(audio_path)
+            return await self._invoke(self._secondary, "transcribe", audio_path)
 
     async def transcribe_raw(
         self,
@@ -102,7 +109,7 @@ class FallbackASRProvider(ASRProviderBase):
         language: str | None = None,
     ) -> str:
         try:
-            return await self._primary.transcribe_raw(audio_bytes, filename, language)
+            return await self._invoke(self._primary, "transcribe_raw", audio_bytes, filename, language)
         except Exception as primary_exc:
             logger.warning(
                 "ASR primary provider %s failed (transcribe_raw), falling back to %s: %s",
@@ -110,7 +117,7 @@ class FallbackASRProvider(ASRProviderBase):
                 self._secondary_name,
                 primary_exc,
             )
-            return await self._secondary.transcribe_raw(audio_bytes, filename, language)
+            return await self._invoke(self._secondary, "transcribe_raw", audio_bytes, filename, language)
 
     async def transcribe_segments(
         self,
@@ -119,7 +126,7 @@ class FallbackASRProvider(ASRProviderBase):
         language: str | None = None,
     ) -> list[TranscriptionSegment]:
         try:
-            return await self._primary.transcribe_segments(audio_path, segments, language)
+            return await self._invoke(self._primary, "transcribe_segments", audio_path, segments, language)
         except Exception as primary_exc:
             logger.warning(
                 "ASR primary provider %s failed (transcribe_segments), falling back to %s: %s",
@@ -127,13 +134,13 @@ class FallbackASRProvider(ASRProviderBase):
                 self._secondary_name,
                 primary_exc,
             )
-            return await self._secondary.transcribe_segments(audio_path, segments, language)
+            return await self._invoke(self._secondary, "transcribe_segments", audio_path, segments, language)
 
     async def close(self) -> None:
         """Close both underlying providers."""
         for provider in (self._primary, self._secondary):
             try:
-                await provider.close()
+                await self._invoke(provider, "close")
             except Exception:
                 logger.debug("Error closing provider %s", provider, exc_info=True)
 
@@ -147,6 +154,8 @@ def _create_provider(name: ASRProvider) -> ASRProviderBase:
             asr_url=os.getenv("ASR_URL", "https://api.mistral.ai"),
             model=os.getenv("ASR_MODEL", "voxtral-mini-latest"),
             api_key=os.getenv("MISTRAL_API_KEY", ""),
+            proxy=os.getenv("PROXY_URL"),
+            min_request_interval=float(os.getenv("ASR_MIN_INTERVAL", "1.0")),
         )
     if name is ASRProvider.LITELLM:
         from .litellm_client import LiteLLMASRClient
@@ -163,7 +172,7 @@ def get_asr_provider(
 
     Args:
         preference: Provider name string (``"mistral"`` or ``"litellm"``).
-            ``None`` defaults to ``"mistral"``.
+            ``None`` defaults to ``"litellm"``.
         fallback: If *True* (default), wraps the chosen provider in a
             :class:`FallbackASRProvider` that retries with the other provider
             when the primary fails.  Per-request only — never mutates stored
@@ -176,11 +185,11 @@ def get_asr_provider(
         ASRError: If both providers fail (when fallback is enabled).
     """
     # Resolve preference → enum
-    pref = (preference or "mistral").strip().lower()
+    pref = (preference or "litellm").strip().lower()
     try:
         primary_enum = ASRProvider(pref)
     except ValueError:
-        logger.warning("Unknown ASR provider %r, defaulting to mistral", preference)
+        logger.warning("Unknown ASR provider %r, defaulting to litellm", preference)
         primary_enum = ASRProvider.MISTRAL
 
     primary = _create_provider(primary_enum)
