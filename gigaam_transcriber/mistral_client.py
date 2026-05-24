@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 import httpx
 
+from .asr_provider import ASRProviderBase
 from .data_models import TranscriptionSegment
 from .exceptions import AudioProcessingError, ASRError
 
@@ -31,7 +32,7 @@ class _SegmentSpec:
     speaker: Optional[str] = None
 
 
-class MistralASRClient:
+class MistralASRClient(ASRProviderBase):
     """Клиент для Mistral API `/v1/audio/transcriptions`.
 
     Args:

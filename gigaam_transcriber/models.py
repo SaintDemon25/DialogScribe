@@ -112,3 +112,13 @@ class MeetingPrepPlan(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
 
     user = relationship("User", backref="meeting_prep_plans")
+
+
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
+    asr_provider: Mapped[str] = mapped_column(String(100), nullable=False, default="mistral")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -17,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from .asr_provider import get_asr_provider
 from .audio_processor import AudioProcessor
 from .data_models import (
     DiarizationMode,
@@ -32,13 +34,21 @@ from .exceptions import (
     UnsupportedFormatError,
 )
 from .formatters import save_result
-from .mistral_client import MistralASRClient
 from .segment_merger import MergeConfig, SegmentMerger
 
 logger = logging.getLogger(__name__)
 
 CHUNK_THRESHOLD_SEC = 1800.0
 CHUNK_DURATION_SEC = 300.0
+
+
+def _call_provider(provider: Any, method_name: str, *args: Any, **kwargs: Any) -> Any:
+    """Call a provider method, handling both sync and async implementations."""
+    method = getattr(provider, method_name)
+    result = method(*args, **kwargs)
+    if asyncio.iscoroutine(result):
+        return asyncio.run(result)
+    return result
 
 
 class GigaAMTranscriber:
@@ -77,7 +87,6 @@ class GigaAMTranscriber:
 
         self._audio_processor: Optional[AudioProcessor] = None
         self._diarization_manager: Optional[DiarizationManager] = None
-        self._asr_client: Optional[MistralASRClient] = None
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -107,18 +116,6 @@ class GigaAMTranscriber:
             )
         return self._diarization_manager
 
-    @property
-    def asr_client(self) -> MistralASRClient:
-        if self._asr_client is None:
-            self._asr_client = MistralASRClient(
-                asr_url=self.asr_url,
-                model=self.asr_model,
-                api_key=self.api_key or "",
-                proxy=self.proxy,
-                min_request_interval=self._min_request_interval,
-            )
-        return self._asr_client
-
     def __enter__(self) -> "GigaAMTranscriber":
         return self
 
@@ -126,10 +123,7 @@ class GigaAMTranscriber:
         self.cleanup()
 
     def cleanup(self) -> None:
-        """Освобождение ресурсов (HTTP-клиент и временные объекты)."""
-        if self._asr_client is not None:
-            self._asr_client.close()
-            self._asr_client = None
+        """Освобождение ресурсов."""
         logger.info("Ресурсы освобождены")
 
     def _validate_input(self, path: Path) -> None:
@@ -196,6 +190,7 @@ class GigaAMTranscriber:
         merge_same_speaker: bool = True,
         min_segment_gap: float = 0.5,
         denoise: str = "none",
+        provider_preference: Optional[str] = None,
     ) -> TranscriptionResult:
         """Универсальный метод транскрипции аудио/видео."""
         input_path = Path(input_path)
@@ -217,21 +212,27 @@ class GigaAMTranscriber:
             "max_speakers": max_speakers,
         }
 
-        if self.audio_processor.is_video_file(input_path):
-            result = self._transcribe_video(
-                input_path,
-                diarization=diarization,
-                keep_temp_audio=False,
-                denoise=denoise,
-                **diarization_kwargs,
-            )
-        else:
-            result = self._transcribe_audio(
-                input_path,
-                diarization=diarization,
-                denoise=denoise,
-                **diarization_kwargs,
-            )
+        provider = get_asr_provider(provider_preference)
+        try:
+            if self.audio_processor.is_video_file(input_path):
+                result = self._transcribe_video(
+                    input_path,
+                    provider=provider,
+                    diarization=diarization,
+                    keep_temp_audio=False,
+                    denoise=denoise,
+                    **diarization_kwargs,
+                )
+            else:
+                result = self._transcribe_audio(
+                    input_path,
+                    provider=provider,
+                    diarization=diarization,
+                    denoise=denoise,
+                    **diarization_kwargs,
+                )
+        finally:
+            _call_provider(provider, "close")
 
         if merge_same_speaker and result.segments:
             merger = SegmentMerger(MergeConfig(max_gap=min_segment_gap))
@@ -263,11 +264,13 @@ class GigaAMTranscriber:
     def _transcribe_audio(
         self,
         audio_path: Path,
+        *,
+        provider: Any,
         diarization: DiarizationMode = "none",
         denoise: str = "none",
         **diarization_kwargs: Any,
     ) -> TranscriptionResult:
-        """Внутренний метод транскрипции аудио через Mistral API."""
+        """Внутренний метод транскрипции аудио через ASR провайдер."""
         temp_audio: Optional[Path] = None
         try:
             working_audio, temp_audio = self._prepare_audio(audio_path, denoise=denoise)
@@ -276,9 +279,9 @@ class GigaAMTranscriber:
             segments: List[TranscriptionSegment]
             if diarization == "none":
                 if duration >= self.chunk_threshold:
-                    text = self._transcribe_chunked(working_audio, duration)
+                    text = self._transcribe_chunked(working_audio, duration, provider=provider)
                 else:
-                    text = self.asr_client.transcribe(str(working_audio)).strip()
+                    text = _call_provider(provider, "transcribe", str(working_audio)).strip()
                 if not text:
                     raise EmptyAudioError(str(audio_path))
                 segments = [
@@ -294,7 +297,6 @@ class GigaAMTranscriber:
                     mode=diarization,
                     **diarization_kwargs,
                 )
-                # Предтранскрипционное объединение сегментов для предотвращения галлюцинаций ASR
                 merger = SegmentMerger(MergeConfig(min_presplit_duration=1.0))
                 speaker_segments = merger.merge_speaker_segments(speaker_segments)
                 speaker_segments = merger.merge_short_speaker_segments(speaker_segments)
@@ -302,9 +304,8 @@ class GigaAMTranscriber:
                     {"start": seg.start, "end": seg.end, "speaker": seg.speaker}
                     for seg in speaker_segments
                 ]
-                api_segments = self.asr_client.transcribe_segments(
-                    str(working_audio),
-                    segment_dicts,
+                api_segments = _call_provider(
+                    provider, "transcribe_segments", str(working_audio), segment_dicts,
                 )
                 segments = [
                     TranscriptionSegment(
@@ -336,7 +337,7 @@ class GigaAMTranscriber:
                 except Exception:
                     pass
 
-    def _transcribe_chunked(self, audio_path: Path, duration: float) -> str:
+    def _transcribe_chunked(self, audio_path: Path, duration: float, *, provider: Any) -> str:
         chunks = self.audio_processor.split_audio(
             audio_path,
             chunk_duration=self.chunk_duration,
@@ -345,7 +346,7 @@ class GigaAMTranscriber:
         try:
 
             def _transcribe_one(idx: int, chunk_path: Path) -> tuple[int, str]:
-                text = self.asr_client.transcribe(str(chunk_path))
+                text = _call_provider(provider, "transcribe", str(chunk_path))
                 return idx, text.strip() if text else ""
 
             texts: List[tuple[int, str]] = []
@@ -371,6 +372,8 @@ class GigaAMTranscriber:
     def _transcribe_video(
         self,
         video_path: Path,
+        *,
+        provider: Any,
         keep_temp_audio: bool = False,
         **kwargs: Any,
     ) -> TranscriptionResult:
@@ -383,7 +386,7 @@ class GigaAMTranscriber:
                 normalize=True,
             )
 
-            result = self._transcribe_audio(temp_audio, denoise=denoise, **kwargs)
+            result = self._transcribe_audio(temp_audio, provider=provider, denoise=denoise, **kwargs)
             result.metadata["source"] = str(video_path)
             result.metadata["source_type"] = "video"
             return result
@@ -521,8 +524,7 @@ class GigaAMTranscriber:
         return {
             "model_name": self.asr_model,
             "asr_url": self.asr_url,
-            "provider": "mistral",
-            "loaded": self._asr_client is not None,
+            "provider": "per-request (via factory)",
             "hf_token_set": self.hf_token is not None,
             "api_key_set": bool(self.api_key),
             "cache_dir": str(self.cache_dir),
