@@ -37,7 +37,7 @@ async def get_asr_provider(
     settings = result.scalar_one_or_none()
 
     if settings is None:
-        return ASRProviderResponse(provider="mistral")
+        return ASRProviderResponse(provider="litellm")
 
     return ASRProviderResponse(provider=settings.asr_provider)
 

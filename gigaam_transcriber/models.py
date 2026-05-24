@@ -119,6 +119,6 @@ class UserSettings(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
-    asr_provider: Mapped[str] = mapped_column(String(100), nullable=False, default="mistral")
+    asr_provider: Mapped[str] = mapped_column(String(100), nullable=False, default="litellm")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)

@@ -24,7 +24,7 @@ class LiteLLMASRClient(ASRProviderBase):
     def __init__(self) -> None:
         self._base_url = os.getenv("LITELLM_URL", _DEFAULT_URL).rstrip("/")
         self._model = os.getenv("LITELLM_MODEL", _DEFAULT_MODEL)
-        self._api_key = os.getenv("LITELLM_API_KEY", "")
+        self._api_key = os.getenv("LITELLM_API_KEY", os.getenv("LLM_API_KEY", ""))
         self._client = httpx.AsyncClient(timeout=300.0)
 
     async def close(self) -> None:
