@@ -22,6 +22,7 @@ services:
       dockerfile: Dockerfile
       args:
         - HF_TOKEN=${HF_TOKEN:-}
+    restart: unless-stopped
     network_mode: host
     runtime: nvidia
     depends_on:
@@ -36,7 +37,7 @@ services:
       - GRADIO_SERVER_PORT=7860
       # GRADIO_USERNAME and GRADIO_PASSWORD are loaded from Vault via entrypoint.sh
       # Do NOT set them here — they would override Vault values with empty strings
-      - PROXY_URL=http://172.17.0.1:7890
+      - PROXY_URL=http://127.0.0.1:7890
       - API_KEY=${API_KEY:-}
       - MAX_UPLOAD_SIZE_MB=${MAX_UPLOAD_SIZE_MB:-1024}
       - DATABASE_URL=${DATABASE_URL:-}

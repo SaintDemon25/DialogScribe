@@ -4,7 +4,6 @@ Provides hint templates and placeholder functions for generating
 argumentative and navigational hints during live transcription.
 """
 
-import asyncio
 import base64
 import json
 import logging
@@ -14,7 +13,7 @@ import tempfile
 
 from .context_utils import estimate_tokens
 from .exceptions import ASRError
-from .mistral_client import MistralASRClient
+from .asr_provider import get_asr_provider
 from .summarizer import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -135,17 +134,11 @@ HINT_TEMPLATES: dict[str, dict[str, str]] = {
 class AudioAdapter:
     """Per-session audio processing adapter: WebM → ASR transcription."""
 
-    def __init__(self) -> None:
-        asr_url = os.getenv("ASR_URL", "https://api.mistral.ai/v1/asr")
-        model = os.getenv("ASR_MODEL", "voxtral-mini-latest")
-        api_key = os.getenv("MISTRAL_API_KEY", "")
-        proxy = os.getenv("ASR_PROXY") or os.getenv("HTTPS_PROXY")
-        self._asr_client = MistralASRClient(
-            asr_url=asr_url, model=model, api_key=api_key, proxy=proxy
-        )
+    def __init__(self, provider_preference: str | None = None) -> None:
+        self._asr_client = get_asr_provider(preference=provider_preference)
 
     async def process_chunk(self, audio_b64: str, source: str) -> str:
-        """Decode base64 WebM audio, convert to WAV via ffmpeg, send to Mistral ASR.
+        """Decode base64 WebM audio, convert to WAV via ffmpeg, send to ASR.
 
         MediaRecorder with timeslice produces partial WebM fragments that lack
         proper container headers, causing Mistral to reject them.  Converting to
@@ -184,11 +177,12 @@ class AudioAdapter:
                 logger.debug("ffmpeg skipped chunk (rc=%d): %s", result.returncode, result.stderr.decode(errors="replace")[:200])
                 return ""
 
-            loop = asyncio.get_event_loop()
-            text = await loop.run_in_executor(
-                None, self._asr_client.transcribe_raw, tmp_wav, "audio/wav"
+            with open(tmp_wav, "rb") as f:
+                wav_bytes = f.read()
+            transcription = await self._asr_client.transcribe_raw(
+                wav_bytes, "audio.wav"
             )
-            return text
+            return transcription if transcription else ""
         except ASRError:
             raise
         except Exception as exc:
@@ -203,10 +197,8 @@ class AudioAdapter:
                     except OSError:
                         pass
 
-    def close(self) -> None:
-        """Release ASR client resources."""
-        if hasattr(self._asr_client, "close"):
-            self._asr_client.close()
+    async def close(self) -> None:
+        await self._asr_client.close()
 
 
 def generate_hints(

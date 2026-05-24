@@ -1,5 +1,5 @@
 """
-Тесты для модуля transcriber (основной класс).
+Тесты для модуля transcriber (основной класс). 
 
 Тестирует GigaAMTranscriber, использующий Mistral Voxtral API.
 """
@@ -28,7 +28,6 @@ class TestGigaAMTranscriberInit:
 
         assert transcriber.asr_model == "voxtral-mini-latest"
         assert transcriber.asr_url == "https://api.mistral.ai"
-        assert transcriber._asr_client is None  # Lazy loading
 
     def test_custom_asr_model(self):
         """Тест с кастомной моделью ASR."""
@@ -102,39 +101,23 @@ class TestGigaAMTranscriberContextManager:
     def test_context_manager_cleanup(self):
         """Тест очистки при выходе из контекста."""
         transcriber = GigaAMTranscriber()
-        mock_client = MagicMock()
-        transcriber._asr_client = mock_client
-
         transcriber.cleanup()
-
-        mock_client.close.assert_called_once()
-        assert transcriber._asr_client is None
 
     def test_context_manager_exit_closes_client(self):
         """Тест что __exit__ вызывает cleanup."""
         transcriber = GigaAMTranscriber()
-        mock_client = MagicMock()
-        transcriber._asr_client = mock_client
-
         transcriber.__exit__(None, None, None)
-
-        mock_client.close.assert_called_once()
-        assert transcriber._asr_client is None
 
 
 class TestGigaAMTranscriberLazyLoading:
     """Тесты ленивой загрузки."""
 
     def test_asr_client_lazy(self):
-        """Тест ленивой загрузки ASR клиента."""
+        """Тест что ASR провайдер создаётся через фабрику, без персистентного клиента."""
         transcriber = GigaAMTranscriber(api_key="test")
 
-        assert transcriber._asr_client is None
-
-        client = transcriber.asr_client
-
-        assert client is not None
-        assert transcriber._asr_client is not None
+        assert not hasattr(transcriber, "_asr_client")
+        assert transcriber._min_request_interval == 1.0
 
         transcriber.cleanup()
 
@@ -165,11 +148,9 @@ class TestGigaAMTranscriberGetModelInfo:
         assert "model_name" in info
         assert "asr_url" in info
         assert "provider" in info
-        assert "loaded" in info
         assert info["model_name"] == "voxtral-mini-latest"
         assert info["asr_url"] == "https://api.mistral.ai"
-        assert info["provider"] == "mistral"
-        assert info["loaded"] is False
+        assert info["provider"] == "per-request (via factory)"
         assert info["api_key_set"] is True
 
 
@@ -229,13 +210,12 @@ class TestGigaAMTranscriberMocked:
 
     @pytest.fixture
     def mock_transcriber(self):
-        """Фикстура транскрибера с замоканным ASR клиентом."""
+        """Фикстура транскрибера с замоканным ASR провайдером."""
         transcriber = GigaAMTranscriber(api_key="test-key")
 
-        # Мокаем ASR клиент
-        mock_asr = MagicMock()
-        mock_asr.transcribe.return_value = "Тестовая транскрипция"
-        mock_asr.transcribe_segments.return_value = [
+        mock_provider = MagicMock()
+        mock_provider.transcribe.return_value = "Тестовая транскрипция"
+        mock_provider.transcribe_segments.return_value = [
             TranscriptionSegment(
                 text="Первый сегмент",
                 start=0.0,
@@ -250,9 +230,8 @@ class TestGigaAMTranscriberMocked:
             ),
         ]
 
-        transcriber._asr_client = mock_asr
+        transcriber._mock_provider = mock_provider
 
-        # Мокаем audio_processor
         mock_processor = MagicMock()
         mock_processor.is_audio_file.return_value = True
         mock_processor.is_video_file.return_value = False
@@ -266,7 +245,11 @@ class TestGigaAMTranscriberMocked:
 
         transcriber._audio_processor = mock_processor
 
-        return transcriber
+        with patch(
+            "gigaam_transcriber.transcriber.get_asr_provider",
+            return_value=mock_provider,
+        ):
+            yield transcriber
 
     def test_transcribe_no_diarization(self, mock_transcriber, temp_dir):
         """Тест транскрипции без диаризации (весь файл одним запросом)."""
@@ -294,7 +277,7 @@ class TestGigaAMTranscriberMocked:
         audio_file = temp_dir / "test.wav"
         audio_file.write_bytes(b"fake audio content")
 
-        mock_transcriber._asr_client.transcribe.return_value = ""
+        mock_transcriber._mock_provider.transcribe.return_value = ""
 
         from gigaam_transcriber.exceptions import EmptyAudioError
 
@@ -339,7 +322,6 @@ class TestGigaAMTranscriberMocked:
         """Тест get_model_info с загруженным клиентом."""
         info = mock_transcriber.get_model_info()
 
-        assert info["loaded"] is True
         assert info["api_key_set"] is True
         assert info["model_name"] == "voxtral-mini-latest"
 
@@ -386,23 +368,24 @@ class TestGigaAMTranscriberMocked:
 class TestGigaAMTranscriberASRError:
     """Тесты обработки ошибок ASR."""
 
-    def test_asr_client_called_with_correct_params(self, temp_dir):
-        """Тест что ASR клиент получает правильные параметры."""
+    def test_asr_provider_called_correctly(self, temp_dir):
+        """Тест что ASR провайдер вызывается через фабрику."""
         audio_file = temp_dir / "test.wav"
         audio_file.write_bytes(b"fake audio")
 
-        with patch("gigaam_transcriber.transcriber.MistralASRClient") as MockASR:
-            mock_instance = Mock()
-            mock_instance.transcribe.return_value = "Текст"
-            MockASR.return_value = mock_instance
+        mock_provider = MagicMock()
+        mock_provider.transcribe.return_value = "Текст"
 
+        with patch(
+            "gigaam_transcriber.transcriber.get_asr_provider",
+            return_value=mock_provider,
+        ) as mock_factory:
             transcriber = GigaAMTranscriber(
                 api_key="my-key",
                 asr_url="https://custom.api",
                 asr_model="voxtral-large",
             )
 
-            # Мокаем audio_processor
             mock_processor = MagicMock()
             mock_processor.is_supported_file.return_value = True
             mock_processor.is_video_file.return_value = False
@@ -415,14 +398,6 @@ class TestGigaAMTranscriberASRError:
 
             result = transcriber.transcribe(audio_file, diarization="none")
 
-            # Проверяем что клиент создан с правильными параметрами
-            MockASR.assert_called_once_with(
-                asr_url="https://custom.api",
-                model="voxtral-large",
-                api_key="my-key",
-                proxy=None,
-                min_request_interval=1.0,
-            )
-            mock_instance.transcribe.assert_called_once()
-
-            transcriber.cleanup()
+            mock_factory.assert_called_once()
+            mock_provider.transcribe.assert_called_once()
+            mock_provider.close.assert_called_once()

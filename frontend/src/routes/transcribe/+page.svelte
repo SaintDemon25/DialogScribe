@@ -40,8 +40,38 @@
 	let editingSpeakerValue = $state('');
 	let saving = $state(false);
 	let saved = $state(false);
+	let asrProvider = $state('litellm');
+	let asrProviderLoading = $state(true);
+	let asrProviderMsg = $state<{ text: string; type: 'success' | 'error' } | null>(null);
+
+	async function loadAsrProvider() {
+		asrProviderLoading = true;
+		try {
+			const data = await fetchApi<{ provider: string }>('GET', '/api/settings/asr-provider');
+			asrProvider = data.provider || 'litellm';
+		} catch {
+			asrProvider = 'litellm';
+		} finally {
+			asrProviderLoading = false;
+		}
+	}
+
+	async function saveAsrProvider() {
+		asrProviderMsg = null;
+		try {
+			await fetchApi('PUT', '/api/settings/asr-provider', {
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ provider: asrProvider })
+			});
+			asrProviderMsg = { text: 'Сохранено', type: 'success' };
+		} catch (e: any) {
+			asrProviderMsg = { text: e?.message || 'Ошибка сохранения', type: 'error' };
+		}
+		setTimeout(() => { asrProviderMsg = null; }, 3000);
+	}
 
 	onMount(() => {
+		loadAsrProvider();
 		if (result === null) {
 			const stored = get(transcriptionStore);
 			if (stored) result = stored;
@@ -275,6 +305,16 @@
 					placeholder="ru (по умолчанию)"
 					bind:value={language}
 				/>
+			</div>
+			<div class="field">
+				<label for="asr-provider">Провайдер</label>
+				<select id="asr-provider" class="input" bind:value={asrProvider} onchange={saveAsrProvider} disabled={asrProviderLoading}>
+					<option value="litellm">GigaAM</option>
+					<option value="mistral">Mistral</option>
+				</select>
+				{#if asrProviderMsg}
+					<span class="asr-feedback" class:success={asrProviderMsg.type === 'success'} class:error={asrProviderMsg.type === 'error'}>{asrProviderMsg.text}</span>
+				{/if}
 			</div>
 		</div>
 
@@ -649,5 +689,16 @@
 	.send-btn {
 		align-self: flex-start;
 		margin-top: 0.25rem;
+	}
+
+	.asr-feedback {
+		font-size: 0.75rem;
+		margin-top: 0.25rem;
+	}
+	.asr-feedback.success {
+		color: #38a169;
+	}
+	.asr-feedback.error {
+		color: #e53e3e;
 	}
 </style>

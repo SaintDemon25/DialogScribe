@@ -146,6 +146,16 @@
 		}
 	}
 
+	function downloadFile(): void {
+		if (!selectedFile) return;
+		const url = URL.createObjectURL(selectedFile);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = selectedFile.name;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
 	function clearFile(): void {
 		selectedFile = null;
 		fileDuration = null;
@@ -191,6 +201,13 @@
 						{/if}
 					</span>
 				</div>
+				<button class="download-btn" onclick={(e: Event) => { e.stopPropagation(); downloadFile(); }} title="Скачать аудио">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+						<polyline points="7 10 12 15 17 10"/>
+						<line x1="12" y1="15" x2="12" y2="3"/>
+					</svg>
+				</button>
 				<button class="clear-btn" onclick={(e: Event) => { e.stopPropagation(); clearFile(); }} title="Убрать файл">
 					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -327,6 +344,22 @@
 	.file-meta {
 		font-size: 0.75rem;
 		color: var(--color-muted);
+	}
+
+	.download-btn {
+		flex-shrink: 0;
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: var(--color-muted);
+		padding: 0.25rem;
+		border-radius: 4px;
+		transition: color 0.15s, background-color 0.15s;
+	}
+
+	.download-btn:hover {
+		color: var(--color-cta);
+		background-color: rgba(33, 160, 56, 0.08);
 	}
 
 	.clear-btn {

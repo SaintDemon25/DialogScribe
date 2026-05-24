@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import tempfile
@@ -5,13 +6,14 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from gigaam_transcriber import GigaAMTranscriber
 from gigaam_transcriber.auth import get_current_user
 from gigaam_transcriber.data_models import TranscriptionResult
 from gigaam_transcriber.database import get_db
-from gigaam_transcriber.models import User
+from gigaam_transcriber.models import User, UserSettings
 from gigaam_transcriber.limits import check_limit
 from gigaam_transcriber.usage import track_usage
 
@@ -46,6 +48,8 @@ def _transcribe_upload(
     language: str | None,
     transcriber: GigaAMTranscriber,
     denoise: str | None = None,
+    *,
+    provider_preference: str | None = None,
 ) -> dict:
     filename = file.filename or ""
     file_ext = Path(filename).suffix.lower()
@@ -80,6 +84,7 @@ def _transcribe_upload(
             diarization=_map_diarization(diarization_mode),
             language=language or "ru",
             denoise=denoise or "none",
+            provider_preference=provider_preference,
         )
         return {
             "segments": [_segment_to_json(seg) for seg in result.segments],
@@ -110,8 +115,15 @@ async def transcribe(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await check_limit(db, user.id, "transcription_minutes")
+    stmt = select(UserSettings.asr_provider).where(UserSettings.user_id == user.id)
+    db_result = await db.execute(stmt)
+    row = db_result.first()
+    provider_pref = row[0] if row else None
     transcriber = request.app.state.transcriber
-    result = _transcribe_upload(file, diarization_mode, language, transcriber, denoise=denoise)
+    result = await asyncio.to_thread(
+        _transcribe_upload, file, diarization_mode, language, transcriber,
+        denoise=denoise, provider_preference=provider_pref,
+    )
     duration_minutes = result.get("duration", 0) / 60
     await track_usage(db, user.id, "transcription_minutes", duration_minutes)
     await track_usage(db, user.id, "file_upload", 1.0)
@@ -129,8 +141,15 @@ async def transcribe_microphone(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     await check_limit(db, user.id, "transcription_minutes")
+    stmt = select(UserSettings.asr_provider).where(UserSettings.user_id == user.id)
+    db_result = await db.execute(stmt)
+    row = db_result.first()
+    provider_pref = row[0] if row else None
     transcriber = request.app.state.transcriber
-    result = _transcribe_upload(file, diarization_mode, language, transcriber, denoise=denoise)
+    result = await asyncio.to_thread(
+        _transcribe_upload, file, diarization_mode, language, transcriber,
+        denoise=denoise, provider_preference=provider_pref,
+    )
     duration_minutes = result.get("duration", 0) / 60
     await track_usage(db, user.id, "transcription_minutes", duration_minutes)
     return result

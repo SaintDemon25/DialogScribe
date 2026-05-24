@@ -3,9 +3,11 @@ import logging
 import time
 from typing import Literal, cast
 
+import sqlalchemy
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from gigaam_transcriber.auth import decode_token
+from gigaam_transcriber.database import async_session_factory
 from gigaam_transcriber.live_hints_models import (
     AudioChunkMessage,
     ErrorMessage,
@@ -19,6 +21,7 @@ from gigaam_transcriber.live_hints_models import (
 from gigaam_transcriber.meeting_brief_models import BriefUpdateMessage
 from gigaam_transcriber.exceptions import ASRError, AudioProcessingError
 from gigaam_transcriber.live_hints_service import HINT_TEMPLATES, AudioAdapter, generate_hints
+from gigaam_transcriber.models import UserSettings
 from gigaam_transcriber.summarizer import LLMClient, LLMClientConfig
 from gigaam_transcriber.event_detector import EventDetector
 from gigaam_transcriber.accumulator import SessionAccumulator
@@ -66,7 +69,23 @@ async def live_hints_ws(ws: WebSocket):
         return
 
     # ── Per-session client instances ───────────────────────────
-    audio_adapter = AudioAdapter()
+    user_id: str = payload.get("sub", "")
+    provider_preference: str | None = None
+    if user_id:
+        try:
+            async with async_session_factory() as db:
+                settings = await db.execute(
+                    sqlalchemy.select(UserSettings.asr_provider).where(
+                        UserSettings.user_id == user_id
+                    )
+                )
+                row = settings.scalar_one_or_none()
+                if row:
+                    provider_preference = row
+        except Exception:
+            logger.warning("Failed to load ASR provider preference for user %s", user_id, exc_info=True)
+
+    audio_adapter = AudioAdapter(provider_preference=provider_preference)
     llm_client = LLMClient(LLMClientConfig())
     loop = asyncio.get_event_loop()
 
@@ -412,7 +431,7 @@ async def live_hints_ws(ws: WebSocket):
     finally:
         # ── Cleanup ────────────────────────────────────────────
         try:
-            audio_adapter.close()
+            await audio_adapter.close()
         except Exception:
             pass
         transcript_segments.clear()

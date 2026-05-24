@@ -114,12 +114,10 @@ def test_concurrent_requests_respect_interval():
 
 
 def test_transcriber_forwards_interval():
-    """Транскрайбер корректно пробрасывает min_request_interval в ASR-клиент."""
-    with patch("gigaam_transcriber.mistral_client.httpx.Client"):
-        transcriber = GigaAMTranscriber(min_request_interval=2.0)
-        client = transcriber.asr_client
+    """Транскрайбер корректно хранит min_request_interval."""
+    transcriber = GigaAMTranscriber(min_request_interval=2.0)
 
-    assert client._min_request_interval == 2.0
+    assert transcriber._min_request_interval == 2.0
     transcriber.cleanup()
 
 
