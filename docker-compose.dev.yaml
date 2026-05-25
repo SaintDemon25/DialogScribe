@@ -8,16 +8,16 @@ services:
       - "7860:7860"
     environment:
       # Transcription via Mistral Voxtral
-      - MISTRAL_API_KEY=C0OzOov5LJT5JI5os3ZDxJw96VIC7EiZ
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
       - ASR_URL=https://api.mistral.ai
       - ASR_MODEL=voxtral-mini-latest
       # LLM for summary / insights / chat (Mistral OpenAI-compat)
-      - LLM_API_KEY=C0OzOov5LJT5JI5os3ZDxJw96VIC7EiZ
+      - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_BASE_URL=https://api.mistral.ai/v1
       - LLM_MODEL=mistral-small-latest
       # Auth
-      - JWT_SECRET=dev-secret-change-in-prod
-      - API_KEY=
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-prod}
+      - API_KEY=${API_KEY:-}
       # Database (SQLite inside container)
       - DATABASE_URL=sqlite+aiosqlite:////app/data/dialogscribe.db
       # Server
