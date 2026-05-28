@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from gigaam_transcriber.hint_typology import Hint, HintType, HintPriority
-from gigaam_transcriber.summarizer import LLMClient, LLMClientConfig
+from gigaam_transcriber.summarizer import LLMClient, LLMClientConfig, create_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -98,22 +98,24 @@ class LLMCascade:
         advisor_config: Optional[LLMClientConfig] = None,
     ):
         # Classifier client (fast/cheap model)
-        if classifier_config:
-            self._classifier = LLMClient(classifier_config)
-        else:
-            cfg = LLMClientConfig()
-            if DEFAULT_CLASSIFIER_MODEL:
-                cfg.model = DEFAULT_CLASSIFIER_MODEL
-            self._classifier = LLMClient(cfg)
+        self._classifier = self._build_client(classifier_config, DEFAULT_CLASSIFIER_MODEL)
 
         # Advisor client (strong model)
-        if advisor_config:
-            self._advisor = LLMClient(advisor_config)
-        else:
-            cfg = LLMClientConfig()
-            if DEFAULT_ADVISOR_MODEL:
-                cfg.model = DEFAULT_ADVISOR_MODEL
-            self._advisor = LLMClient(cfg)
+        self._advisor = self._build_client(advisor_config, DEFAULT_ADVISOR_MODEL)
+
+    @staticmethod
+    def _build_client(config: Optional[LLMClientConfig], default_model: str):
+        """Build an LLM client. Routes to GigaChat when configured, else OpenAI-compatible.
+
+        The model override only applies to the OpenAI-compatible client; GigaChat
+        uses its single configured model.
+        """
+        if config:
+            return LLMClient(config)
+        client = create_llm_client()
+        if isinstance(client, LLMClient) and default_model:
+            client.config.model = default_model
+        return client
 
     def classify(self, fragment: str) -> Optional[ClassificationResult]:
         """Layer 1: Classify a transcript fragment.
