@@ -22,7 +22,7 @@ from gigaam_transcriber.meeting_brief_models import BriefUpdateMessage
 from gigaam_transcriber.exceptions import ASRError, AudioProcessingError
 from gigaam_transcriber.live_hints_service import HINT_TEMPLATES, AudioAdapter, generate_hints
 from gigaam_transcriber.models import UserSettings
-from gigaam_transcriber.summarizer import LLMClient, LLMClientConfig, create_llm_client
+from gigaam_transcriber.summarizer import LLMClient, LLMClientConfig
 from gigaam_transcriber.event_detector import EventDetector
 from gigaam_transcriber.accumulator import SessionAccumulator
 from gigaam_transcriber.llm_cascade import LLMCascade
@@ -43,6 +43,65 @@ async def get_templates():
         {"slug": key, "label": val["label"]}
         for key, val in HINT_TEMPLATES.items()
     ]
+
+
+def _provider_label(base_url: str) -> str:
+    """Friendly provider name derived from an LLM base URL."""
+    b = (base_url or "").lower()
+    if "mistral" in b:
+        return "Mistral"
+    if "openai" in b:
+        return "OpenAI"
+    if b == "gigachat":
+        return "GigaChat"
+    return base_url or "LLM"
+
+
+@router.get("/info")
+async def get_models_info():
+    """Report the currently active models (ASR + Live Advisor LLM) for the UI.
+
+    Introspects the real provider objects rather than hardcoding, so the
+    indicator always reflects the live configuration.
+    """
+    from gigaam_transcriber.asr_provider import get_asr_provider
+
+    info: dict = {"asr": None, "advisor": None}
+
+    try:
+        asr = get_asr_provider()
+        primary = getattr(asr, "_primary", asr)
+        asr_model = getattr(primary, "_model", "") or ""
+        info["asr"] = {
+            "model": asr_model,
+            "label": "GigaAM" if "gigaam" in asr_model.lower() else (asr_model or "ASR"),
+            "fallback": getattr(asr, "_secondary_name", None),
+        }
+    except Exception:
+        logger.warning("Failed to introspect ASR provider", exc_info=True)
+
+    try:
+        advisor_cfg = LLMCascade()._advisor.config
+        info["advisor"] = {
+            "provider": _provider_label(advisor_cfg.base_url),
+            "model": advisor_cfg.model,
+        }
+    except Exception:
+        logger.warning("Failed to introspect advisor LLM", exc_info=True)
+
+    # Analysis LLM (summary / insights / chat / post-meeting)
+    try:
+        from gigaam_transcriber.summarizer import create_llm_client
+
+        analysis_cfg = create_llm_client().config
+        info["analysis"] = {
+            "provider": _provider_label(analysis_cfg.base_url),
+            "model": analysis_cfg.model,
+        }
+    except Exception:
+        logger.warning("Failed to introspect analysis LLM", exc_info=True)
+
+    return info
 
 
 # ─── WebSocket ─────────────────────────────────────────────────
@@ -86,7 +145,8 @@ async def live_hints_ws(ws: WebSocket):
             logger.warning("Failed to load ASR provider preference for user %s", user_id, exc_info=True)
 
     audio_adapter = AudioAdapter(provider_preference=provider_preference)
-    llm_client = create_llm_client()
+    # Live Advisor uses the OpenAI-compatible client (Mistral), not GigaChat.
+    llm_client = LLMClient(LLMClientConfig())
     loop = asyncio.get_event_loop()
 
     # ── Live Advisor Agent components ──────────────────────────
