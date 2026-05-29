@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from gigaam_transcriber.hint_typology import Hint, HintType, HintPriority
-from gigaam_transcriber.summarizer import LLMClient, LLMClientConfig, create_llm_client
+from gigaam_transcriber.summarizer import LLMClient, LLMClientConfig
 
 logger = logging.getLogger(__name__)
 
@@ -105,17 +105,19 @@ class LLMCascade:
 
     @staticmethod
     def _build_client(config: Optional[LLMClientConfig], default_model: str):
-        """Build an LLM client. Routes to GigaChat when configured, else OpenAI-compatible.
+        """Build the live-advisor LLM client.
 
-        The model override only applies to the OpenAI-compatible client; GigaChat
-        uses its single configured model.
+        The Live Advisor deliberately uses the OpenAI-compatible LLMClient
+        (e.g. Mistral via LLM_BASE_URL/LLM_MODEL/LLM_API_KEY), NOT GigaChat —
+        GigaChat produced poor live hints. Summary/insights/chat stay on the
+        global provider via create_llm_client().
         """
         if config:
             return LLMClient(config)
-        client = create_llm_client()
-        if isinstance(client, LLMClient) and default_model:
-            client.config.model = default_model
-        return client
+        cfg = LLMClientConfig()
+        if default_model:
+            cfg.model = default_model
+        return LLMClient(cfg)
 
     def classify(self, fragment: str) -> Optional[ClassificationResult]:
         """Layer 1: Classify a transcript fragment.
